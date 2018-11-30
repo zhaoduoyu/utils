@@ -1,0 +1,206 @@
+1. scrapy作用：断点续爬 分布式
+	scrapy_redis扩展组件利用共用的redis来存放请求队列和指纹集合
+
+2. scrapy的工作流程
+	a. 爬虫构造request--爬虫中间件--引擎--调度器对request做去重检查之后入队
+	b. 调度器从队列中取出request--引擎--下载中间件--下载器，发送请求获取response
+	c. response--下载中间件--引擎--爬虫中间件--爬虫，进行解析提取
+	d. 提取url，就构造request，重复a步骤
+	e. 提取数据--引擎--管道，处理或保存数据
+
+3. request指纹的生成
+	a. hashlib.sha1()
+	b. url data method
+
+4. request入队的条件
+	a. request.fp not in fp_set
+	b. request.dont_filter == True
+
+5. scrapy框架各种命令
+	scrapy statrproject 项目名
+	scrapy genspider (-t crawl) 爬虫名 爬取范围域名
+	scrapy crawl 爬虫名
+	# 向redis_key中push起始的url
+
+6. scrapyd的使用
+	能够通过webapi去控制爬虫的启动或停止
+	sudo scrapyd 或 scrapyd
+	在项目路径下
+		scrapy.cfg中指定scrapyd服务的url
+		scrapyd-deploy -p 项目名 
+	# 启动爬虫
+		POST http://host:6800/schedule.json
+		project=项目名
+		spider=爬虫名
+		return jobid
+	# 停止爬虫
+		POST http://host:6800/cancel.json
+		project=项目名
+		job=jobid
+	# Gerapy多爬虫管理工具 
+
+7. items.py中的BaseItem
+	# 提取定义字段，防止手误，对scrapy的一些扩展组件支撑
+	在items.py中定义字段
+		字段 = scrapy.Field()
+	在爬虫中导入BaseItem类，实例化之后像字典使用
+
+8. pipelines.py管道
+	process_item(item, spider)
+		管道类中必须有该函数
+		函数必须return item
+		每当爬虫返回一次数据时被调用
+	open_spider(spider) 爬虫开启时仅执行一次
+	close_spider(spider) 爬虫关闭时仅执行一次
+	参数spider就是爬虫类对象
+	要在settings.py中设置开启
+
+9. middlewares.py中间件
+	对request、response进行预处理
+		替换ua 代理ip cookies 对响应进行检查
+	根据逻辑位置分为 爬虫中间件 下载中间件
+	process_request(request, spider)
+		当request经过中间件时被调用
+		不能写return 让其他权重较低的中间件能够接收到request
+	process_response(request, response, spider)
+		当response经过中间件时被调用
+		要return response，让其他权重较低的中间件能够接收到response
+	return request --> 立刻返回引擎 --> 调度器入队
+	return response --> ... --> 爬虫
+	可以通过参数spider.name分别处理不同的爬虫的request或response
+
+10. spider.py爬虫模块
+	1. 爬虫类的对比
+		name = 爬虫名
+		allowed_domains = [爬取范围域名，可以多个，起始url不受限制]
+		start_requests函数：对起始的url构造request并返回
+
+		scrapy.Spider
+			start_urls=[起始url，可以多个]
+			def parse(response)
+		scrapy.spiders.CrawlSpider
+			start_urls=[起始url，可以多个]
+			rules=(规则元祖)
+		scrapy_redis.spiders.RedisSpider
+			redis_key='指定的redis的key'
+			def parse(response)
+		scrapy_redis.spiders.RedisCrawlSpider
+			redis_key='指定的redis的key'
+			rules=(规则元祖)
+
+	2. scrapy构造请求对象
+		scrapy.Request(url,
+					   callback=,
+					   method='GET',
+					   body=b'json_str',
+					   headers={},
+					   cookies={},
+					   meta={},
+					   dont_filter=False)
+		scrapy.FormRequest(url,
+						   #没有method、body
+						   formdata={},
+						   #其他参数一样)
+
+		# 专门使用splash服务来对响应进行加载渲染，返回渲染后的response
+		scrapy_splash.SplashRequest(url,
+									args={'timeout':3},
+									endpoint='render.html') # 指定使用这个接口来处理
+
+    3. meta属性的使用
+    	向callback指定的函数中传递数据
+    	response.meta = request.meta
+    	在callback解析函数中取出传递的数据
+    		item = response.meta['item']
+    	使用代理ip
+    		request.meta['proxy'] = 'http://host:port'
+
+    4. scrapy提取的方式
+    	response.xpath() 
+    	response.xpath().extract()
+    	response.xpath().extract_first()
+
+    5. request、response常用的属性
+    	response.url
+    	response.request.url
+    	response.cookies
+    	response.request.cookies
+    	response.headers
+    	response.request.headers
+    	response.body # bytes
+    	response.status_code
+
+    6. 解析函数中只能返回{} BaseItem Request None
+
+    7. rules规则元祖
+    	rules = (
+    		Rule(LinkExtractor(规则参数), callback='func', follow=True)
+    		# 链接提取器按照规则参数提取url，构造request；发送请求获取响应reponse
+    		# 链接提取器提取的url对应的响应进入callback指定的函数解析
+    		# 链接提取器提取的url对应的响应进入rules规则元祖中提取处理
+    		# LinkExtractor链接提取器是必要参数
+    			# allow：re匹配a标签href属性的值
+    			# restrict_xpaths：xpath定位标签，标签范围内的url都会被提取
+    			# deny allow_domains deny_domains  
+    			# 最终提取的url一定是符合所有参数规则的
+    	)
+
+11. settings.py配置
+	a. 常用配置
+		ROBOTSTXT_OBAY=False
+		USER_AGENT
+		DEFAULT_REQUEST_HEADERS # 不能写ua
+
+		ITEM_PIPELINES
+		SPIDER_MIDDLEWARES
+		DOWNLOADER_MIDDLEWARES
+			# 字典，左位置右权重，权重值越小，越优先执行
+
+		COOKIES_DEBUG 默认是False不显示cookies的传递过程
+		COOKIES_ENABLE 默认是True开启cookies的传递
+
+		LOG_LEVEL 默认是'DEBUG'控制日志输出的等级
+		LOG_FILE 指定日志文件，终端将不再输出日志信息，受LOG_LEVEL控制
+
+		DOWNLOAD_DELAY 默认是0表示下载延迟 秒
+		CONCURRENT_REQUESTS 默认是16表示同时最大的请求数
+
+	b. scrapy_redis的配置
+		DUPEFILTER_CLASS 指纹去重类
+		SCHEDULER 调度器类
+		SCHEDULER_PERSISIT=True持久化请求队列和指纹集合
+		ITEM_PIPELINES={'scrapy_redis.pipelines.RedisPipeline': 400}
+		REDIS_URL
+
+	c. scrapy_splash配置
+		DUPEFILTER_CLASS 指纹去重类
+		DOWNLOADER_MIDDLEWARES = {
+			'scrapy_splash.SplashCookiesMiddleware': 723,
+			'scrapy_splash.SplashMiddleware': 725,
+			'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
+		}
+		HTTPCACHE_STORAGE = 'scrapy_splash.SplashAwareFSCacheStorage' 使用splash的http缓存
+		SPLASH_URL
+
+	d. scrapy_redis和scrapy_splash配合使用的配置
+		scrapy_redis的配置
+		scrapy_splash的配置
+		指定DUPEFILTER_CLASS是重写dupefilter指纹去重类
+
+		# scrapy_redis和scrapy_splash配合使用的指纹去重类重写
+			# 继承scrapy_redis的dupfilter类，使用scrapy_splash的request_fingerprint函数
+			from copy import deepcopy
+			from scrapy.utils.request import request_fingerprint
+			from scrapy.utils.url import canonicalize_url
+			from scrapy_splash.utils import dict_hash
+			from scrapy_redis.dupefilter import RFPDupeFilter
+			def splash_request_fingerprint(request, include_headers=None):
+			    fp = request_fingerprint(request, include_headers=include_headers)
+			    if 'splash' not in request.meta: return fp
+			    splash_options = deepcopy(request.meta['splash'])
+			    args = splash_options.setdefault('args', {})
+			    if 'url' in args: args['url'] = canonicalize_url(args['url'], keep_fragments=True)
+			    return dict_hash(splash_options, fp)
+			class SplashAwareDupeFilter(RFPDupeFilter):
+			    def request_fingerprint(self, request):
+			        return splash_request_fingerprint(request)
