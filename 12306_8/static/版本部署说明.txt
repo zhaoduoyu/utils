@@ -1,0 +1,35 @@
+火眼抢票v1.0
+    购买火车票的tornado-webAPI后端接口
+实现功能:
+    查询车次车票及价格
+    获取乘客信息
+    购票以及抢票刷票
+
+项目地址
+    url = 'http://spider.insightcredit.cn/huochepiao/'
+
+开发环境
+    ubuntu 16.04
+    pycharm 2016.3.1
+
+    python 2.7.12
+        tornado 4.5.2
+        celery 3.1.0
+        requests 2.18.4
+        redis 2.10.5
+
+    redis-py-cluster 1.3.4
+    rabbitmq-server
+    tornado-celery 0.3.5
+
+启动
+service rabbitmq-server start
+service redis-server start
+cd tasks
+celery -A tasks worker
+# celery multi start w1 -A tasks -l info # 后台运行日志级别 info
+cd ..
+python main.py
+
+
+
