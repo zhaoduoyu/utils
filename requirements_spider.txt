@@ -40,7 +40,7 @@ Jinja2==2.10
 Js2Py==0.59
 jsmin==2.2.2
 jsonpath==0.80
-lxml==4.2.5
+lxml==4.6.2
 MarkupSafe==1.0
 multidict==4.4.2
 oauthlib==2.1.0
