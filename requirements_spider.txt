@@ -56,7 +56,7 @@ ptyprocess==0.6.0
 public==2.0.1
 pyasn1==0.4.4
 pyasn1-modules==0.2.2
-pycares==2.3.0
+pycares==4.2.0
 pycparser==2.19
 pycurl==7.43.0.2
 PyDispatcher==2.0.5
